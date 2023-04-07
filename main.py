@@ -82,7 +82,7 @@ class GamesReviewScraper:
 
         def scroll_to_load() -> None:
             self.webdriver.execute_script("window.scrollTo(0, document.body.scrollHeight * 0.75);")
-            time.sleep(1.50)
+            time.sleep(2.00)
             self.webdriver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
 
         try:
@@ -99,10 +99,10 @@ class GamesReviewScraper:
             return []
 
         def find_number_of_views():
-            nonlocal num_reviews_found, page_content 
+            nonlocal num_reviews_found, should_keep_counting, page_content 
 
             # update reviews # until reaching certain quantity 
-            while (num_reviews_found < self.steam_scraper_config["steam_review_minimum_quantity"]):
+            while (should_keep_counting):
 
                 # wait until page content is loaded 
                 if (page_content is not None):
@@ -119,6 +119,8 @@ class GamesReviewScraper:
 
         # number of reviews previously discovered 
         prev_num_reviews = 0
+
+        should_keep_counting = True 
 
         # timestamp when "prev_num_reviews" was recorded 
         sot = datetime.datetime.now()
@@ -138,6 +140,10 @@ class GamesReviewScraper:
 
             page_content = self.webdriver.page_source
 
+            # load more content if button visible
+            if (self.webdriver.find_element(By.ID, "GetMoreContentBtn").is_displayed()):
+                self.webdriver.execute_script("CheckForMoreContent();")
+
             # terminate searching after review # remained over certain duration 
             if ((datetime.datetime.now() - sot).total_seconds() >= self.steam_scraper_config["steam_review_load_timeout"]):
                 if (num_reviews_found == prev_num_reviews):
@@ -148,7 +154,9 @@ class GamesReviewScraper:
             sys.stdout.write(f"\r[ Discovered ] [ {num_reviews_found} ]")
             sys.stdout.flush()
 
-            time.sleep(1.20)
+            time.sleep(1.00)
+                    
+        should_keep_counting = False 
 
         sys.stdout.write(f"\r< {num_reviews_found} Reviews Discovered >")
 
@@ -201,6 +209,8 @@ class GamesReviewScraper:
             
         try:
 
+            print("< Saving >")
+
             # [ (voting1, review1), ... ] => ([ voting1, ... ], [ review1, ... ])
             scrape_content = tuple(zip(*scrape_content))
 
@@ -209,6 +219,8 @@ class GamesReviewScraper:
                 "voting" : scrape_content[0],
                 "content" : scrape_content[1]
             }).to_csv(filename, *args, **kwargs)
+
+            print("< Saved >")
 
             return True 
 
@@ -236,9 +248,9 @@ if (__name__ == "__main__"):
             "steam_review_text_class" : "apphub_CardTextContent",
             "steam_review_post_class" : "modalContentLink",
             "steam_review_vote_class" : "title",
-            "steam_review_minimum_quantity" : 100,
+            "steam_review_minimum_quantity" : 10000,
             "steam_review_load_timeout" : 20,
-            "steam_connect_timeout" : 10
+            "steam_connect_timeout" : 15
         }
 
         # initialization
