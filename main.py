@@ -82,7 +82,7 @@ class GamesReviewScraper:
 
         def scroll_to_load() -> None:
             self.webdriver.execute_script("window.scrollTo(0, document.body.scrollHeight * 0.75);")
-            time.sleep(2.00)
+            time.sleep(1.02)
             self.webdriver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
 
         try:
@@ -207,6 +207,9 @@ class GamesReviewScraper:
     @staticmethod 
     def save_result_to_csv(filename : str, scrape_content : List[ Tuple[ str, str ] ], *args, **kwargs) -> bool:
             
+        if (len(scrape_content) == 0):
+            return False 
+
         try:
 
             print("< Saving >")
@@ -250,17 +253,39 @@ if (__name__ == "__main__"):
             "steam_review_vote_class" : "title",
             "steam_review_minimum_quantity" : 10000,
             "steam_review_load_timeout" : 20,
+            "steam_chart_num_games" : 100,
             "steam_connect_timeout" : 15
         }
 
-        # initialization
-        scraper = GamesReviewScraper(steam_scraper_config)
+        while True:
 
-        # scrape review links for various games 
-        for url_idx, url in enumerate(scraper.scrape_review_links()):
+            try:
 
-            # scrape specified number of reviews and save as ".csv"
-            if not (scraper.save_result_to_csv(os.path.join(result_folder, f"result_{url_idx}.csv"), 
-                scraper._scrape_game_reviews(url), encoding = "utf-8", index = False
-            )):
-                print(f"Error saving content: {url}")
+                # initialization
+                scraper = GamesReviewScraper(steam_scraper_config)
+
+                num_links_scraped = len(os.listdir(result_folder))
+
+                print(f"Already Scraped: {num_links_scraped}")
+                
+                if (steam_scraper_config["steam_chart_num_games"] <= num_links_scraped):
+                    break 
+
+                # scrape review links for various games 
+                for url_idx, url in enumerate(scraper.scrape_review_links()):
+                    
+                    if (url_idx < num_links_scraped):
+                        continue 
+
+                    # scrape specified number of reviews and save as ".csv"
+                    while not (scraper.save_result_to_csv(os.path.join(result_folder, f"result_{url_idx}.csv"), 
+                        scraper._scrape_game_reviews(url), encoding = "utf-8", index = False
+                    )):
+                        print(f"Error saving content: {url}")
+                        time.sleep(30)
+
+            except:
+
+                del scraper 
+
+                time.sleep(60)
