@@ -253,7 +253,7 @@ if (__name__ == "__main__"):
             "steam_review_vote_class" : "title",
             "steam_review_minimum_quantity" : 10000,
             "steam_review_load_timeout" : 20,
-            "steam_chart_num_games" : 100,
+            "steam_chart_num_games" : 200,
             "steam_connect_timeout" : 15
         }
 
