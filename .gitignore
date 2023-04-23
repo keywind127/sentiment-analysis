@@ -1,5 +1,8 @@
 __pycache__
 .*
 !/.gitignore
-reviews 
+reviews
 news
+reviews_tokenized
+news_tokenized
+news_articles
