@@ -1,5 +1,5 @@
 from typing import *
-import nltk
+import nltk, os
 
 _CORPUS_WORDNET = None 
 
@@ -89,13 +89,20 @@ class StopWordFilter:
     _STOPWORDS = None 
 
     @classmethod 
-    def initialize_stopwords(class_) -> None:
+    def initialize_stopwords(class_, stopword_filename : Optional[ str ] = None) -> None:
         if (class_._STOPWORDS is None):
-            nltk.download("stopwords")
-            class_._STOPWORDS = set(nltk.corpus.stopwords.words())
+            if (stopword_filename is None):
+                nltk.download("stopwords")
+                class_._STOPWORDS = set(nltk.corpus.stopwords.words())
+            else:
+                class_._STOPWORDS = set(
+                    filter("".__ne__, open(stopword_filename, 
+                        "r", encoding = "utf-8").read().split("\n"))
+                )
 
-    def __init__(self) -> None:
-        self.initialize_stopwords()
+    def __init__(self, stopword_filename : Optional[ str ] = None) -> None:
+        assert ((stopword_filename is None) or (isinstance(stopword_filename, str)))
+        self.initialize_stopwords(stopword_filename)
 
     def filter_stopwords(self, tokens : List[ str ]) -> List[ str ]:
         return [
@@ -109,6 +116,8 @@ if (__name__ == "__main__"):
 
     sentence = "It is well known to the world that computer science students may face unemployment after graduation due to the rise of artificial intelligence. "
 
+    stopword_filename = os.path.join(os.path.dirname(__file__), "custom_stopwords.txt")
+
     tokens = tokenizer.tokenize(sentence)
 
     case_optimizer = StringCaseOptimizer()
@@ -121,7 +130,7 @@ if (__name__ == "__main__"):
 
     print(tokens)
 
-    stopword_filter = StopWordFilter()
+    stopword_filter = StopWordFilter(stopword_filename)
 
     tokens = stopword_filter.filter_stopwords(tokens)
 

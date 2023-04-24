@@ -1,4 +1,4 @@
-from nlp_utils import load_word_list, TokenLemmatizer, StringCaseOptimizer
+from nlp_utils import load_word_list, StopWordFilter, TokenLemmatizer, StringCaseOptimizer
 import pandas, nltk, sys, os
 from typing import *
 
@@ -14,6 +14,8 @@ if (__name__ == "__main__"):
     training_data_folder = os.path.join(os.path.dirname(__file__), "reviews")
 
     custom_dict_filename = os.path.join(os.path.dirname(__file__), "custom_words_sent.txt")
+
+    stopword_filename = os.path.join(os.path.dirname(__file__), "custom_stopwords.txt")
 
     token_regular_expression = "[a-zA-Z0-9]+"
     
@@ -39,6 +41,8 @@ if (__name__ == "__main__"):
 
     lemmatizer = TokenLemmatizer(custom_dictionaries)
 
+    stopword_filter = StopWordFilter(stopword_filename)
+
     files_in_folder = sorted([  
         os.path.join(training_data_folder, filename) for filename in 
             os.listdir(training_data_folder) if (os.path.splitext(filename)[1].lower() == ".csv")
@@ -58,11 +62,9 @@ if (__name__ == "__main__"):
 
             sys.stdout.flush()
 
-            tokens = lemmatizer.lemmatize_tokens(
-                case_optimizer.optimize_case(
-                    tokenizer.tokenize(
-                        str(row_data[dataframe_column_name])))
-            )
+            tokens = stopword_filter.filter_stopwords(lemmatizer.lemmatize_tokens(
+                case_optimizer.optimize_case(tokenizer.tokenize(str(row_data[dataframe_column_name])))
+            ))
 
             rows_to_keep.append(len(tokens) >= min_tokens)
 
