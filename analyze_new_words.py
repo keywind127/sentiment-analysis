@@ -1,76 +1,105 @@
-from nlp_utils import StringCaseOptimizer, save_word_list
-import pandas, nltk, sys, os 
+from nlp_utils import DefaultVocabularySet, BasicStringTokenizer, LetterCaseOptimizer
+import pandas, sys, os 
 from typing import * 
 
-def analyze_word_occurrence(tokens : Union[ Set[ str ], List[ str ] ]) -> Dict[ str, int ]:
-    tokens_occurrences = dict()
-    for token in tokens:
-        tokens_occurrences[token] = (
-            (tokens_occurrences[token] + 1) 
-                if (token in tokens_occurrences) else (1)
-        )
-    return tokens_occurrences 
+class TokensOccurrenceAnalyzer:
 
-def filter_rare_tokens(tokens : Dict[ str, int ], thresh_occurrence : Optional[ int ] = 10) -> Dict[ str, int ]:
-    return {  
-        token : occurrence for token, occurrence in tokens.items() 
-            if (occurrence >= thresh_occurrence)  
-    }
+    @staticmethod 
+    def analyze_token_occurrences(tokens : List[ str ], result_dictionary : Dict[ str, int ] = None) -> Dict[ str, int ]:
+        if (result_dictionary is None):
+            result_dictionary = dict()
+        for token in tokens:
+            result_dictionary[token] = ((result_dictionary[token] + 1) if (token in result_dictionary) else (1))
+        return result_dictionary
+
+    @staticmethod 
+    def save_occurrences(filename : str, token_occurrences : Dict[ str, int ], sort : Optional[ bool ] = True, *args, **kwargs) -> None:
+        token_occurrences = list(token_occurrences.items())
+        if (sort):
+            token_occurrences.sort(key = lambda x : x[1], reverse = True)
+        keys, values = zip(*token_occurrences)
+        pandas.DataFrame({  "token" : keys, "occurrences" : values  }).to_csv(filename, *args, **kwargs)
+
+    def __init__(self, pattern : str) -> None:
+        DVS = DefaultVocabularySet
+        DVS.initialize()
+        self.tokenizer = BasicStringTokenizer(pattern)
+        self.optimizer = LetterCaseOptimizer(DVS.stopwords.union(DVS.wordnet, DVS.words, DVS.names))
+        self.dictionary = dict()
+        self.dataframe_counter = 1
+
+    def analyze(self, dataframe : pandas.DataFrame, column_name : str, verbose : Optional[ bool ] = True) -> None:
+        num_rows = len(dataframe)
+        for row_idx, row_data in dataframe.iterrows():
+            if (verbose):
+                sys.stdout.write("\rAnalyzing #{0}: {1:.1f}%".format(self.dataframe_counter, row_idx / num_rows * 100))
+                sys.stdout.flush()
+            self.analyze_token_occurrences(self.optimizer.optimize(self.tokenizer.tokenize(str(row_data[column_name])), return_unknown = True)[1], self.dictionary)
+        if (verbose):
+            sys.stdout.write("\rAnalyzing #{0}: 100.0%".format(self.dataframe_counter))
+            print("")
+        self.dataframe_counter += 1
+        
+    def analyze_from_folder(self, folder_name     : str, 
+                                  column_name     : str, 
+                                  verbose         : Optional[ bool ] = True,
+                                  encoding        : Optional[ str  ] = "utf-8",
+                                  error_bad_lines : Optional[ bool ] = False   ) -> None:
+        if (verbose):
+            print("Analyzing Folder: {0}\n".format(folder_name))
+        for idx, dataframe_filename in enumerate( os.path.join(folder_name, filename) for filename in os.listdir(folder_name) if (filename[-4:].lower() == ".csv") ):
+            self.analyze(pandas.read_csv(dataframe_filename, encoding = encoding, error_bad_lines = error_bad_lines), column_name, verbose)
+        if (verbose):
+            print("\nAnalysis Complete.")
+
+    def filter(self, min_threshold : int) -> None:
+        for token, occurrence in list(self.dictionary.items()):
+            if (occurrence < min_threshold):
+                del self.dictionary[token]
+
+    def save(self, filename : str, sort : Optional[ bool ] = True, encoding : Optional[ str ] = "utf-8", index : Optional[ bool ] = False, *args, **kwargs) -> None:
+        self.save_occurrences(filename, self.dictionary, sort, encoding = encoding, index = index, *args, **kwargs)
+
+    @staticmethod 
+    def convert_csv_to_txt(dst_filename : str, src_filename : str, encoding : Optional[ str ] = "utf-8", error_bad_lines : Optional[ bool ] = False, *args, **kwargs) -> None:
+        dataframe = pandas.read_csv(src_filename, encoding = encoding, error_bad_lines = error_bad_lines)
+        with open(dst_filename, "w", encoding = encoding, *args, **kwargs) as wf:
+            for row_idx, row_data in dataframe.iterrows():
+                wf.write(f"{row_data['token']}\n")
 
 if (__name__ == "__main__"):
 
+
     # >> PARAMETERS 
 
-    training_data_folder = os.path.join(os.path.dirname(__file__), "reviews")
+    training_data_folder = os.path.join(os.path.dirname(__file__), "reviews") # reviews / news
 
-    custom_dict_filename = os.path.join(os.path.dirname(__file__), "custom_words_sent.txt")
+    custom_dict_folder   = os.path.join(os.path.dirname(__file__), "dictionary")
 
-    token_regular_expression = "[a-zA-Z0-9]+"
+    if not (os.path.exists(custom_dict_folder)):
+        os.makedirs(custom_dict_folder)
+
+    custom_dict_filename     = os.path.join(custom_dict_folder, "custom_words_sent.txt") # custom_words_sent.txt / custom_words_neut.txt
+
+    token_regular_expression = "[a-zA-Z0-9\']+"
     
-    dataframe_column_name = "content"
+    dataframe_column_name    = "content"
 
-    thresh_occurrence = 20
+    thresh_occurrence        = 30
 
     # << PARAMETERS 
 
-    files_in_folder = [  
-        os.path.join(training_data_folder, filename) for filename in 
-            os.listdir(training_data_folder) if (os.path.splitext(filename)[1].lower() == ".csv")
-    ]
 
-    tokenizer = nltk.tokenize.RegexpTokenizer(token_regular_expression)
+    occurrence_dataframe_filename = os.path.splitext(custom_dict_filename)[0] + ".csv" 
 
-    optimizer = StringCaseOptimizer()
+    tokens_occurrences_analyzer   = TokensOccurrenceAnalyzer(token_regular_expression)
 
-    tokens = dict()
+    tokens_occurrences_analyzer.analyze_from_folder(training_data_folder, dataframe_column_name)
 
-    for idx, filename in enumerate(files_in_folder):
-        
-        dataframe = pandas.read_csv(filename, error_bad_lines = False)
+    tokens_occurrences_analyzer.filter(thresh_occurrence)
 
-        num_rows = len(dataframe)
+    tokens_occurrences_analyzer.save(occurrence_dataframe_filename) 
 
-        for df_idx, df_row in dataframe.iterrows():
+    tokens_occurrences_analyzer.convert_csv_to_txt(custom_dict_filename, occurrence_dataframe_filename)
 
-            sys.stdout.write("\rAnalyzing #{0}: {1:.1f}%".format(idx, df_idx / num_rows * 100))
-
-            sys.stdout.flush()
-
-            __tokens = analyze_word_occurrence(
-                optimizer.filter_unknown_words(
-                    tokenizer.tokenize(str(df_row[dataframe_column_name])))
-            )
-
-            for __token, __occ in __tokens.items():
-
-                tokens[__token] = (
-                    (tokens[__token] + __occ) if (__token in tokens) else (__occ)
-                )
-
-        sys.stdout.write(f"\rAnalyzing #{idx}: 100.0%")
-
-        print("")
-
-    save_word_list(custom_dict_filename, filter_rare_tokens(tokens, thresh_occurrence).keys())
-
-    print(f"\nNew vocabulary list saved to: \"{custom_dict_filename}\"")
+    print(f"Saved New Tokens: \"{occurrence_dataframe_filename}\" & \"{custom_dict_filename}\"")

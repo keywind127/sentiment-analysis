@@ -1,59 +1,100 @@
+import contractions, nltk
 from typing import *
-import nltk, os
 
-_CORPUS_WORDNET = None 
+class classproperty(property):
+    def __get__(self, owner_self, owner_cls):
+        return self.fget(owner_cls)
 
-def initialize_wordnet(custom_words : Set[ str ] = None) -> None:
-    global _CORPUS_WORDNET
-    if (_CORPUS_WORDNET is None):
+class DefaultVocabularySet:
+
+    __corpus_word_sets = [
+        None, None, None, None
+    ]
+
+    @classmethod 
+    def initialize(class_) -> bool:
+        if all(  (wordset is not None) for wordset in class_.__corpus_word_sets  ):
+            return False 
         nltk.download("stopwords")
         nltk.download("wordnet")
         nltk.download("names")
-        _CORPUS_WORDNET = (
-            set(nltk.corpus.wordnet.words()).union(
-                set(nltk.corpus.names.words())).union(
-                    set(nltk.corpus.stopwords.words()))
+        nltk.download("words")
+        class_.__corpus_word_sets = [
+            set(nltk.corpus.stopwords.words()),
+            set(nltk.corpus.wordnet.words()),
+            set(nltk.corpus.names.words()),
+            set(nltk.corpus.words.words())
+        ]
+        return True 
+
+    @classproperty
+    def stopwords(class_) -> Union[ Set[ str ], None ]:
+        return class_.__corpus_word_sets[0]
+
+    @classproperty
+    def wordnet(class_) -> Union[ Set[ str ], None ]:
+        return class_.__corpus_word_sets[1]
+
+    @classproperty
+    def names(class_) -> Union[ Set[ str ], None ]:
+        return class_.__corpus_word_sets[2]
+
+    @classproperty
+    def words(class_) -> Union[ Set[ str ], None ]:
+        return class_.__corpus_word_sets[3]
+  
+class LetterCaseOptimizer:
+
+    def __init__(self, token_dictionary : Set[ str ]) -> None:
+        self.token_dictionary = set( 
+            token for token in token_dictionary 
         )
-    if (custom_words is not None):
-        _CORPUS_WORDNET.update(custom_words)
 
-class StringCaseOptimizer:
-            
     @staticmethod 
-    def enumerate_case(string : str) -> Iterator[ str ]:
-        yield string;  yield string.lower();  yield string.upper();  yield string.capitalize()
+    def enumerate_letter_cases(text : str) -> Iterator[ str ]:
+        yield text;  yield text.upper();  yield text.capitalize();  yield text.lower()
 
-    def __init__(self, custom_words : Set[ str ] = None) -> None:
-        assert ((custom_words is None) or (isinstance(custom_words, set)))
-        initialize_wordnet(custom_words)
-
-    def optimize_case(self, tokens : List[ str ], in_place : Optional[ bool ] = False) -> List[ str ]:
-        if not (in_place):
+    def optimize(self, tokens         : List[ str ], 
+                       make_copy      : Optional[ bool ] = False, 
+                       return_unknown : Optional[ bool ] = False,
+                       filter_unknown : Optional[ bool ] = False) -> Union[ List[ str ], Tuple[ List[ str ], List[ str ] ] ]:
+        if (make_copy):
             tokens = [  token for token in tokens  ]
+        unknown_tokens = [];  known_tokens = []
         for idx, token in enumerate(tokens):
-            for token_case in self.enumerate_case(token):
-                if (token_case in _CORPUS_WORDNET):
-                    tokens[idx] = token_case 
+            for token in self.enumerate_letter_cases(token):
+                if (token in self.token_dictionary):
+                    known_tokens.append(token)
                     break 
+            else:
+                unknown_tokens.append(token)
+            tokens[idx] = token
+        if (filter_unknown):
+            tokens = known_tokens
+        return ((tokens, unknown_tokens) if (return_unknown) else (tokens))
+
+class BasicStringTokenizer(nltk.tokenize.RegexpTokenizer):
+
+    def __init__(self, pattern : Optional[ str ] = "[a-zA-Z0-9\']+", *args, **kwargs) -> None:
+        assert ("'" in pattern)
+        super(BasicStringTokenizer, self).__init__(pattern, *args, **kwargs)
+ 
+    def expand_contractions_within_list(self, tokens : List[ str ], make_copy : Optional[ bool ] = False) -> List[ str ]:
+        if (make_copy):
+            tokens = [  token for token in tokens  ]
+        for idx, token in reversed(list(enumerate(tokens))):
+            if ("'" in token):
+                tokens[ idx : idx + 1 ] = contractions.fix(token).split(" ")
         return tokens 
 
-    def filter_unknown_words(self, tokens : List[ str ]) -> List[ str ]:
-        return [
-            token for token in tokens if not any(
-                token_case in _CORPUS_WORDNET 
-                    for token_case in self.enumerate_case(token))
-        ]
+    def tokenize(self, text : str, *args, **kwargs) -> List[ str ]:
+        return self.expand_contractions_within_list(
+            super(BasicStringTokenizer, self).tokenize(text, *args, **kwargs)
+        )
 
-def save_word_list(filename : str, tokens : List[ str ]) -> None:
-    with open(filename, mode = "w", encoding = "utf-8") as wf:
-        for token in tokens:
-            wf.write(f"{token}\n")
-
-def load_word_list(filename : str) -> List[ str ]:
-    with open(filename, mode = "r", encoding = "utf-8") as rf:
-        return list(filter("".__ne__, rf.read().split("\n")))
-
-class TokenLemmatizer:
+class TokensTaggingLemmatizer(nltk.stem.WordNetLemmatizer):
+    
+    nltk.download("averaged_perceptron_tagger")
 
     @staticmethod 
     def wordnet_pos_tagging(tokens : List[ str ]) -> List[ Tuple[ str, str ] ]:
@@ -71,67 +112,26 @@ class TokenLemmatizer:
             tokens[idx] = (token, nltk.corpus.wordnet.NOUN)
         return tokens 
 
-    def __init__(self, custom_words : Set[ str ] = None) -> None:
-        assert ((custom_words is None) or (isinstance(custom_words, set)))
-        initialize_wordnet(custom_words)
-        self.lemmatizer = nltk.stem.WordNetLemmatizer()
+    def __init__(self) -> None:
+        super(TokensTaggingLemmatizer, self).__init__()
 
-    def lemmatize_tokens(self, tokens : List[ str ]) -> List[ str ]:
+    def lemmatize(self, tokens : List[ str ]) -> List[ str ]:
         tokens = self.wordnet_pos_tagging(tokens)
-        for idx, (token, pos_tag) in enumerate(tokens):
-            tokens[idx] = self.lemmatizer.lemmatize(token, pos_tag)
+        for idx, token_tag_pair in enumerate(tokens):
+            tokens[idx] = super(TokensTaggingLemmatizer, self).lemmatize(*token_tag_pair)
         return tokens 
 
-class StopWordFilter:
+class StopWordRemover:
 
-    # We observed stopwords removal may negatively impact the performance of sentiment analysis.
+    def __init__(self, stopwords : Set[ str ]) -> None:
+        self.stopwords = stopwords 
 
-    _STOPWORDS = None 
+    def remove(self, tokens : List[ str ]) -> List[ str ]:
+        return list(filter(lambda x : not self.stopwords.__contains__(x.lower()), tokens))
 
-    @classmethod 
-    def initialize_stopwords(class_, stopword_filename : Optional[ str ] = None) -> None:
-        if (class_._STOPWORDS is None):
-            if (stopword_filename is None):
-                nltk.download("stopwords")
-                class_._STOPWORDS = set(nltk.corpus.stopwords.words())
-            else:
-                class_._STOPWORDS = set(
-                    filter("".__ne__, open(stopword_filename, 
-                        "r", encoding = "utf-8").read().split("\n"))
-                )
+class CustomWordSet(set):
 
-    def __init__(self, stopword_filename : Optional[ str ] = None) -> None:
-        assert ((stopword_filename is None) or (isinstance(stopword_filename, str)))
-        self.initialize_stopwords(stopword_filename)
-
-    def filter_stopwords(self, tokens : List[ str ]) -> List[ str ]:
-        return [
-            token for token in tokens 
-                if token not in self._STOPWORDS
-        ]
-
-if (__name__ == "__main__"):
-
-    tokenizer = nltk.tokenize.RegexpTokenizer("[a-zA-Z0-9]+")
-
-    sentence = "It is well known to the world that computer science students may face unemployment after graduation due to the rise of artificial intelligence. "
-
-    stopword_filename = os.path.join(os.path.dirname(__file__), "custom_stopwords.txt")
-
-    tokens = tokenizer.tokenize(sentence)
-
-    case_optimizer = StringCaseOptimizer()
-
-    tokens = case_optimizer.optimize_case(tokens)
-
-    lemmatizer = TokenLemmatizer()
-
-    tokens = lemmatizer.lemmatize_tokens(tokens)
-
-    print(tokens)
-
-    stopword_filter = StopWordFilter(stopword_filename)
-
-    tokens = stopword_filter.filter_stopwords(tokens)
-
-    print(tokens)
+    def __init__(self, filename : str, *args, **kwargs) -> None:
+        super(CustomWordSet, self).__init__(*args, **kwargs)
+        self.update(set(filter("".__ne__, open(filename, "r", encoding = "utf-8").read().split("\n"))))
+     
