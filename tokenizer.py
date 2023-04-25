@@ -70,7 +70,7 @@ if (__name__ == "__main__"):
 
             dataframe.loc[row_idx, dataframe_column_name] = str(tokens)
 
-        sys.stdout.write(f"\rTokenizing #{idx}: 100%")
+        sys.stdout.write(f"\rTokenizing #{idx}: 100.0%")
 
         print("")
 
