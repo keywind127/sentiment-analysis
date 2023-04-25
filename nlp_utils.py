@@ -1,4 +1,4 @@
-import contractions, nltk
+import contractions, nltk, re
 from typing import *
 
 class classproperty(property):
@@ -135,3 +135,5 @@ class CustomWordSet(set):
         super(CustomWordSet, self).__init__(*args, **kwargs)
         self.update(set(filter("".__ne__, open(filename, "r", encoding = "utf-8").read().split("\n"))))
      
+def remove_symbols(tokens : List[ str ]) -> List[ str ]:
+    return re.findall("[a-zA-Z0-9]+", " ".join(tokens))

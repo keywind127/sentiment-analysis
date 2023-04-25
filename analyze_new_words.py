@@ -1,4 +1,4 @@
-from nlp_utils import DefaultVocabularySet, BasicStringTokenizer, LetterCaseOptimizer
+from nlp_utils import remove_symbols, DefaultVocabularySet, BasicStringTokenizer, LetterCaseOptimizer
 import pandas, sys, os 
 from typing import * 
 
@@ -34,7 +34,7 @@ class TokensOccurrenceAnalyzer:
             if (verbose):
                 sys.stdout.write("\rAnalyzing #{0}: {1:.1f}%".format(self.dataframe_counter, row_idx / num_rows * 100))
                 sys.stdout.flush()
-            self.analyze_token_occurrences(self.optimizer.optimize(self.tokenizer.tokenize(str(row_data[column_name])), return_unknown = True)[1], self.dictionary)
+            self.analyze_token_occurrences(self.optimizer.optimize(remove_symbols(self.tokenizer.tokenize(str(row_data[column_name]))), return_unknown = True)[1], self.dictionary)
         if (verbose):
             sys.stdout.write("\rAnalyzing #{0}: 100.0%".format(self.dataframe_counter))
             print("")
@@ -57,7 +57,11 @@ class TokensOccurrenceAnalyzer:
             if (occurrence < min_threshold):
                 del self.dictionary[token]
 
-    def save(self, filename : str, sort : Optional[ bool ] = True, encoding : Optional[ str ] = "utf-8", index : Optional[ bool ] = False, *args, **kwargs) -> None:
+    def save(self, filename :           str, 
+                   sort     : Optional[ bool ] = True, 
+                   encoding : Optional[ str  ] = "utf-8", 
+                   index    : Optional[ bool ] = False,   *args, **kwargs) -> None:
+        
         self.save_occurrences(filename, self.dictionary, sort, encoding = encoding, index = index, *args, **kwargs)
 
     @staticmethod 
@@ -72,14 +76,14 @@ if (__name__ == "__main__"):
 
     # >> PARAMETERS 
 
-    training_data_folder = os.path.join(os.path.dirname(__file__), "reviews") # reviews / news
+    training_data_folder = os.path.join(os.path.dirname(__file__), "news") # reviews / news
 
     custom_dict_folder   = os.path.join(os.path.dirname(__file__), "dictionary")
 
     if not (os.path.exists(custom_dict_folder)):
         os.makedirs(custom_dict_folder)
 
-    custom_dict_filename     = os.path.join(custom_dict_folder, "custom_words_sent.txt") # custom_words_sent.txt / custom_words_neut.txt
+    custom_dict_filename     = os.path.join(custom_dict_folder, "custom_words_neut.txt") # custom_words_sent.txt / custom_words_neut.txt
 
     token_regular_expression = "[a-zA-Z0-9\']+"
     

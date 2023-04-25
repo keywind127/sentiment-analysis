@@ -1,4 +1,4 @@
-from nlp_utils import CustomWordSet, StopWordRemover, DefaultVocabularySet, BasicStringTokenizer, LetterCaseOptimizer, TokensTaggingLemmatizer
+from nlp_utils import remove_symbols, CustomWordSet, StopWordRemover, DefaultVocabularySet, BasicStringTokenizer, LetterCaseOptimizer, TokensTaggingLemmatizer
 import pandas, sys, os
 from typing import *
 
@@ -70,8 +70,8 @@ if (__name__ == "__main__"):
             sys.stdout.flush()
 
             tokens = stopword_filter.remove(lemmatizer.lemmatize(
-                case_optimizer.optimize(tokenizer.tokenize(str(row_data[dataframe_column_name])))
-            ))
+                case_optimizer.optimize(remove_symbols(tokenizer.tokenize(str(row_data[dataframe_column_name])))
+            )))
 
             rows_to_keep.append(len(tokens) >= min_tokens)
 
