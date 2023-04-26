@@ -67,6 +67,8 @@ if (__name__ == "__main__"):
 
     CASE_TRAINING   = 1
 
+    CASE_TESTING    = 2
+
     # << CONSTANTS
 
     
@@ -91,7 +93,7 @@ if (__name__ == "__main__"):
 
     num_epochs  = 30
 
-    CASE = CASE_TRAINING
+    CASE = CASE_TESTING
 
     # << PARAMETERS
 
@@ -123,3 +125,21 @@ if (__name__ == "__main__"):
         word_embedder.save(word2vec_model_name)
 
         print("> Saving Success.")
+
+    if (CASE == CASE_TESTING):
+
+        word_embedder = Word2Vec.load(word2vec_model_name)
+
+        def find_similarity(token1 : str, token2 : str, verbose : Optional[ bool ] = True) -> float:
+            global word_embedder
+            similarity_score = word_embedder.wv.similarity(token1, token2)
+            if (verbose):
+                print("Similarity {0:.3f} - \"{1}\" & \"{2}\"".format(abs(similarity_score), token1, token2))
+            return similarity_score
+
+        token1 = "girl"
+
+        tokens = [ "boy", "woman", "laser", "universe", "program", "truck", "lady" ]
+
+        for token in tokens:
+            find_similarity(token1, token)
