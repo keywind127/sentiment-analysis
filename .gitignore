@@ -6,3 +6,5 @@ news
 reviews_tokenized
 news_tokenized
 news_articles
+dictionary/training_data.pickle
+dictionary/w2v_embedder.*

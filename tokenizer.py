@@ -1,29 +1,31 @@
-from nlp_utils import load_word_list, StopWordFilter, TokenLemmatizer, StringCaseOptimizer
-import pandas, nltk, sys, os
+from nlp_utils import remove_symbols, CustomWordSet, StopWordRemover, DefaultVocabularySet, BasicStringTokenizer, LetterCaseOptimizer, TokensTaggingLemmatizer
+import pandas, sys, os
 from typing import *
 
 if (__name__ == "__main__"):
 
+
     # >> PARAMETERS
 
     custom_dictionaries = [  
-        os.path.join(os.path.dirname(__file__), "custom_words_neut.txt"),
-        os.path.join(os.path.dirname(__file__), "custom_words_sent.txt")
+        os.path.join(os.path.dirname(__file__), "dictionary/custom_words_neut.txt"),
+        os.path.join(os.path.dirname(__file__), "dictionary/custom_words_sent.txt")
     ]
 
-    training_data_folder = os.path.join(os.path.dirname(__file__), "reviews")
+    training_data_folder     = os.path.join(os.path.dirname(__file__), "news") # reviews / news 
 
-    custom_dict_filename = os.path.join(os.path.dirname(__file__), "custom_words_sent.txt")
+    stopword_filename        = os.path.join(os.path.dirname(__file__), "dictionary/custom_stopwords.txt")
 
-    stopword_filename = os.path.join(os.path.dirname(__file__), "custom_stopwords.txt")
-
-    token_regular_expression = "[a-zA-Z0-9]+"
+    token_regular_expression = "[a-zA-Z0-9\']+"
     
-    dataframe_column_name = "content"
+    dataframe_column_name    = "content"
 
-    min_tokens = 10
+    min_tokens               = 10
 
     # << PARAMETERS 
+
+
+    DefaultVocabularySet.initialize()
 
     training_data_output_folder = training_data_folder + "_tokenized"
 
@@ -31,17 +33,22 @@ if (__name__ == "__main__"):
         os.makedirs(training_data_output_folder)
 
     custom_dictionaries = set().union(
-        *(set(load_word_list(filename)) 
+        *(CustomWordSet(filename) 
             for filename in custom_dictionaries)
     )
 
-    tokenizer = nltk.tokenize.RegexpTokenizer(token_regular_expression)
+    tokenizer = BasicStringTokenizer(token_regular_expression)
 
-    case_optimizer = StringCaseOptimizer(custom_dictionaries)
+    case_optimizer = LetterCaseOptimizer(custom_dictionaries.union(
+        DefaultVocabularySet.stopwords, 
+        DefaultVocabularySet.wordnet, 
+        DefaultVocabularySet.words,
+        DefaultVocabularySet.names,
+    )) 
 
-    lemmatizer = TokenLemmatizer(custom_dictionaries)
+    lemmatizer = TokensTaggingLemmatizer()
 
-    stopword_filter = StopWordFilter(stopword_filename)
+    stopword_filter = StopWordRemover(CustomWordSet(stopword_filename))
 
     files_in_folder = sorted([  
         os.path.join(training_data_folder, filename) for filename in 
@@ -62,9 +69,9 @@ if (__name__ == "__main__"):
 
             sys.stdout.flush()
 
-            tokens = stopword_filter.filter_stopwords(lemmatizer.lemmatize_tokens(
-                case_optimizer.optimize_case(tokenizer.tokenize(str(row_data[dataframe_column_name])))
-            ))
+            tokens = stopword_filter.remove(lemmatizer.lemmatize(
+                case_optimizer.optimize(remove_symbols(tokenizer.tokenize(str(row_data[dataframe_column_name])))
+            )))
 
             rows_to_keep.append(len(tokens) >= min_tokens)
 
